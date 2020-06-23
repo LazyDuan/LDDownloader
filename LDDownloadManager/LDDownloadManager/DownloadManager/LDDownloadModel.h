@@ -9,13 +9,14 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-typedef NS_ENUM(NSInteger,DownloadState) {
-    DownloadStateStart     = 0,     /** 下载中 */
-    DownloadStateSuspended = 1,     /** 下载暂停 */
-    DownloadStateCompleted = 2,     /** 下载完成 */
-    DownloadStateFailed    = 3      /** 下载失败 */
+typedef NS_ENUM(NSInteger,FileDownloadState) {
+    FileDownloadStart     = 0,     /** 下载中 */
+    FileDownloadSuspended = 1,     /** 下载暂停 */
+    FileDownloadCompleted = 2,     /** 下载完成 */
+    FileDownloadFailed    = 3,     /** 下载失败 */
+    FileDownloadNone      = 4,     /** 未下载 */
+    
 };
-NS_ASSUME_NONNULL_BEGIN
 
 @interface LDDownloadModel : NSObject
 
@@ -32,11 +33,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) NSString *mimeType;
 
 /** 下载进度 */
-@property (nonatomic, copy) void(^progressBlock)(NSInteger receivedSize, NSInteger expectedSize, CGFloat progress);
-
+@property (nonatomic, copy) void(^progress)(NSInteger receivedSize, NSInteger expectedSize, CGFloat progress);
 /** 下载状态 */
-@property (nonatomic, copy) void(^stateBlock)(DownloadState state);
+@property (nonatomic, copy) void(^state)(FileDownloadState state);
+/** 下载结果 */
+@property (nonatomic, copy) void (^completionHandler)(NSString * filePath, NSError * error);
 
 @end
 
-NS_ASSUME_NONNULL_END

@@ -51,22 +51,23 @@ static LDDownloadManager *_downloadManager;
 /**
  *  设置下载回调
  */
-- (void)setBlock:(NSString *)url progress:(void(^)(NSInteger receivedSize, NSInteger expectedSize, CGFloat progress))progressBlock state:(void(^)(DownloadState state))stateBlock{
+- (void)setBlock:(NSString *)url progress:(void(^)(NSInteger receivedSize, NSInteger expectedSize, CGFloat progress))progress state:(void(^)(FileDownloadState state))state completionHandler:( void (^)(NSString * filePath, NSError * error))completionHandler{
     NSURLSessionDataTask *task = [self getTask:url];
     if (task) {
         LDDownloadModel *sessionModel = [self getSessionModel:task.taskIdentifier];
-        sessionModel.progressBlock = progressBlock;
-        sessionModel.stateBlock = stateBlock;
+        sessionModel.progress = progress;
+        sessionModel.state = state;
+        sessionModel.completionHandler = completionHandler;
         [self.sessionModels setValue:sessionModel forKey:@(task.taskIdentifier).stringValue];
     }
 }
 /**
  *  开启任务下载资源
  */
-- (void)download:(NSString *)url progress:(void (^)(NSInteger, NSInteger, CGFloat))progressBlock state:(void (^)(DownloadState))stateBlock{
+- (void)download:(NSString *)url progress:(void (^)(NSInteger, NSInteger, CGFloat))progress state:(void(^)(FileDownloadState state))state completionHandler:(nullable void (^)(NSString * filePath, NSError * error))completionHandler{
     if (!url) return;
-    if ([self isCompletion:url]) {
-        stateBlock(DownloadStateCompleted);
+    if ([self fileDownloadStateWithUrl:url]== FileDownloadCompleted) {
+        state(FileDownloadCompleted);
         NSLog(@"----该资源已下载完成");
         return;
     }
@@ -101,21 +102,13 @@ static LDDownloadManager *_downloadManager;
     
     LDDownloadModel *sessionModel = [[LDDownloadModel alloc] init];
     sessionModel.url = url;
-    sessionModel.progressBlock = progressBlock;
-    sessionModel.stateBlock = stateBlock;
+    sessionModel.progress = progress;
+    sessionModel.state = state;
+    sessionModel.completionHandler = completionHandler;
     sessionModel.stream = stream;
     [self.sessionModels setValue:sessionModel forKey:@(task.taskIdentifier).stringValue];
     
     [self start:url];
-}
-/**
- *  判断该文件是否下载完成
- */
-- (BOOL)isCompletion:(NSString *)url{
-    if ([self fileTotalLength:url] && [self downloadFileLengthWithUrl:url] == [self fileTotalLength:url]) {
-        return YES;
-    }
-    return NO;
 }
 
 /**
@@ -125,6 +118,25 @@ static LDDownloadManager *_downloadManager;
     return [self fileTotalLength:url] == 0 ? 0.0 : 1.0 * [self downloadFileLengthWithUrl:url] /  [self fileTotalLength:url];
 }
 
+- (FileDownloadState)fileDownloadStateWithUrl:(NSString *)url{
+    if ([self fileTotalLength:url]) {
+        if([self downloadFileLengthWithUrl:url] == [self fileTotalLength:url]){
+            return FileDownloadCompleted;
+        }else{
+            return FileDownloadSuspended;
+        }
+        
+    }
+    return FileDownloadNone;
+}
+- (NSString *)downloadFilePathWithUrl:(NSString *)url{
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSString *filePath = [self filePathWithUrl:url];
+    if ([fileManager fileExistsAtPath:filePath]) {
+        return filePath;
+    }
+    return @"";
+}
 /**
  *  获取该资源总大小
  */
@@ -134,7 +146,7 @@ static LDDownloadManager *_downloadManager;
 /**
  *  删除该资源
  */
-- (void)deleteFile:(NSString *)url{
+- (void)deleteFileWithUrl:(NSString *)url{
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSString *filePath = [self filePathWithUrl:url];
     if ([fileManager fileExistsAtPath:filePath]) {
@@ -217,7 +229,7 @@ static LDDownloadManager *_downloadManager;
     NSURLSessionDataTask *task = [self getTask:url];
     [task resume];
     
-    [self getSessionModel:task.taskIdentifier].stateBlock(DownloadStateStart);
+    [self getSessionModel:task.taskIdentifier].state(FileDownloadStart);
 }
 
 /**
@@ -226,7 +238,7 @@ static LDDownloadManager *_downloadManager;
 - (void)pause:(NSString *)url{
     NSURLSessionDataTask *task = [self getTask:url];
     [task suspend];
-    [self getSessionModel:task.taskIdentifier].stateBlock(DownloadStateSuspended);
+    [self getSessionModel:task.taskIdentifier].state(FileDownloadSuspended);
 }
 /**
  *  根据url获得对应的下载任务
@@ -281,7 +293,7 @@ static LDDownloadManager *_downloadManager;
     NSUInteger expectedSize = sessionModel.totalLength;
     CGFloat progress = 1.0 * receivedSize / expectedSize;
     
-    sessionModel.progressBlock(receivedSize, expectedSize, progress);
+    sessionModel.progress(receivedSize, expectedSize, progress);
 }
 
 /**
@@ -290,33 +302,14 @@ static LDDownloadManager *_downloadManager;
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error{
     LDDownloadModel *sessionModel = [self getSessionModel:task.taskIdentifier];
     if (!sessionModel) return;
-    NSArray *array = [sessionModel.mimeType componentsSeparatedByString:@"/" ];
-    
-        //1 必须在 block 中调用
-//        [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
-//            //2 异步执行保存图片操作
-//            if ([array[0] isEqual:@"image"]) {
-//                UIImage *image = [UIImage imageWithData:[NSData dataWithContentsOfURL:[NSURL fileURLWithPath:HSFileFullpath(sessionModel.url)]]];
-//                [PHAssetChangeRequest creationRequestForAssetFromImage:image];
-//            }else if([array[0] isEqual:@"video"]){
-//                [PHAssetChangeRequest creationRequestForAssetFromVideoAtFileURL:[NSURL fileURLWithPath:HSFileFullpath(sessionModel.url)]];
-//            }
-//            
-//        } completionHandler:^(BOOL success, NSError * _Nullable error) {
-//            //3 保存结束后，回调
-//            if (error) {
-//                [SVProgressHUD showErrorWithStatus:@"保存失败"];
-//            }else
-//                [SVProgressHUD showSuccessWithStatus:@"已保存到系统相册"];
-//        }];
-//    
-    if ([self isCompletion:sessionModel.url]) {
+    if ([self fileDownloadStateWithUrl:sessionModel.url]==FileDownloadCompleted) {
         // 下载完成
-        sessionModel.stateBlock(DownloadStateCompleted);
+        sessionModel.state(FileDownloadCompleted);
     } else if (error){
         // 下载失败
-        sessionModel.stateBlock(DownloadStateFailed);
+        sessionModel.state(FileDownloadFailed);
     }
+    sessionModel.completionHandler([self filePathWithUrl:sessionModel.url], error);
     
     // 关闭流
     [sessionModel.stream close];

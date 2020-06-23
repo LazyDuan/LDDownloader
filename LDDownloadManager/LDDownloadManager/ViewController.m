@@ -31,30 +31,32 @@
             self.progressView.progress = progress;
             NSLog(@"progress==%f",progress);
         });
-    } state:^(DownloadState state) {
+    } state:^(FileDownloadState state) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self refreshButtonWithDownloadState:state];
         });
+    } completionHandler:^(NSString * _Nonnull filePath, NSError * _Nonnull error) {
+        
     }];
 }
-- (void)refreshButtonWithDownloadState:(DownloadState)state{
+- (void)refreshButtonWithDownloadState:(FileDownloadState)state{
     switch (state) {
-        case DownloadStateStart:
+        case FileDownloadStart:
         {
             [self.downloadButton setTitle:@"暂停" forState:UIControlStateNormal];
             [self.downloadButton setBackgroundColor:RGBCOLOR(255, 159, 97)];
         }
             break;
-        case DownloadStateSuspended:
+        case FileDownloadSuspended:
         {
                 [self.downloadButton setTitle:@"继续" forState:UIControlStateNormal];
         }
-        case DownloadStateFailed:
+        case FileDownloadFailed:
         {
             [self.downloadButton setTitle:@"下载" forState:UIControlStateNormal];
         }
             break;
-        case DownloadStateCompleted:{
+        case FileDownloadCompleted:{
             [self.downloadButton setTitle:@"已下载" forState:UIControlStateNormal];
             [self.downloadButton setBackgroundColor:RGBCOLOR(187, 187, 187)];
         }
@@ -64,9 +66,9 @@
     }
 }
 - (IBAction)deleteFile:(id)sender {
-    [[LDDownloadManager sharedInstance] deleteFile:self.url];
+    [[LDDownloadManager sharedInstance] deleteFileWithUrl:self.url];
     self.progressView.progress = 0;
-    [self refreshButtonWithDownloadState:DownloadStateFailed];
+    [self refreshButtonWithDownloadState:FileDownloadFailed];
 }
 
 
