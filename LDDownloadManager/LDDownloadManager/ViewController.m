@@ -35,7 +35,7 @@
         dispatch_async(dispatch_get_main_queue(), ^{
             [self refreshButtonWithDownloadState:state];
         });
-    } completionHandler:^(NSString * _Nonnull filePath, NSError * _Nonnull error) {
+    } completionHandler:^(NSString * filePath, NSError * error) {
         
     }];
 }
